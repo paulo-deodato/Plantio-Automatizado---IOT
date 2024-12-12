@@ -1,0 +1,162 @@
+# Projeto: Sistema de Controle de Luz para Plantas com ESP32 e MQTT
+
+## **Descrição Geral**
+Este projeto utiliza um ESP32 para monitorar e controlar a luminosidade de um ambiente de cultivo de plantas. Caso a luz natural seja insuficiente, o sistema aciona uma luz artificial dimmerizável para complementar a luminosidade. A luminosidade medida e o estado da luz artificial são enviados para um broker MQTT, permitindo o monitoramento remoto.
+
+---
+
+## **Componentes Utilizados**
+- **ESP32**: Microcontrolador principal.
+- **Potenciômetro**: Simula um sensor de luminosidade real (0-50.000 lux).
+- **LED Dimmerizável**: Representa a luz artificial controlada via PWM.
+- **Broker MQTT**: Para publicação dos dados de luminosidade e status da luz artificial.
+
+---
+
+## **Conexões do Circuito**
+
+| Componente           | Pino no ESP32 | Função                                  |
+|----------------------|---------------|-----------------------------------------|
+| Potenciômetro (VCC)  | 3.3V          | Alimentação do potenciômetro            |
+| Potenciômetro (GND)  | GND           | Terra do potenciômetro                  |
+| Potenciômetro (OUT)  | GPIO34        | Leitura analógica da luminosidade       |
+| LED Dimmerizável     | GPIO25        | Controle PWM da luz artificial          |
+
+---
+
+## **Funcionamento do Sistema**
+1. **Leitura da Luminosidade**:
+   - O potenciômetro gera valores de 0 a 4095, que são mapeados para a faixa de **0 a 50.000 lux**.
+   - A leitura é realizada a cada 5 segundos.
+
+2. **Controle da Luz Artificial**:
+   - A luz artificial é acionada quando a luminosidade medida está abaixo de **5.000 lux**.
+   - A intensidade da luz artificial é ajustada proporcionalmente ao déficit de luz natural.
+   - O tempo total de luz (natural + artificial) é limitado a **12 horas por ciclo diário**.
+
+3. **Publicação via MQTT**:
+   - A luminosidade medida (em lux) é publicada no tópico MQTT `planta1/luminosidade`.
+   - O status da luz artificial (`ON` ou `OFF`) é publicado no tópico `planta1/light_status`.
+
+---
+
+## **Regras de Negócio**
+1. **Limiar de Luminosidade**:
+   - O sistema considera 5.000 lux como o limite mínimo aceitável para a planta.
+   - Se a luminosidade for inferior a este valor, o sistema ativa a luz artificial para complementar a diferença.
+
+2. **Limite de Horas de Luz**:
+   - O tempo total de luz artificial não pode exceder 12 horas por ciclo diário.
+   - Após atingir o limite de 12 horas, a luz artificial é desativada independentemente da luminosidade ambiente.
+
+3. **Intervalo de Leitura**:
+   - O sensor de luminosidade é lido a cada 5 segundos para otimizar o desempenho e evitar leituras redundantes.
+
+---
+
+## **Configuração WiFi e MQTT**
+### **WiFi**
+- **SSID**: `Wokwi-GUEST`
+- **Senha**: `""` (sem senha)
+
+### **Broker MQTT**
+- **Servidor**: `broker.hivemq.com`
+- **Porta**: `1883`
+- **Tópicos**:
+  - `planta1/luminosidade`: Publica o valor da luminosidade medida (em lux).
+  - `planta1/light_status`: Publica o status da luz artificial (`ON` ou `OFF`).
+
+---
+
+## **Fluxo do Código**
+1. **Inicialização**:
+   - Conexão com a rede WiFi.
+   - Configuração do cliente MQTT.
+
+2. **Loop Principal**:
+   - Verifica a conexão MQTT e reconecta se necessário.
+   - Realiza a leitura do sensor de luminosidade a cada 5 segundos.
+   - Publica os dados de luminosidade e status da luz artificial no MQTT.
+   - Controla a luz artificial com base na luminosidade e no tempo total de luz acumulado.
+
+3. **Reset Diário**:
+   - O sistema pode ser configurado para reiniciar o contador de tempo de luz artificial em um novo ciclo diário.
+
+---
+
+## **Mensagens no MQTT**
+### **Exemplo de Mensagens Publicadas**
+1. **Luminosidade**:
+   - Tópico: `planta1/luminosidade`
+   - Exemplo de Payload: `4200` (lux)
+
+2. **Status da Luz Artificial**:
+   - Tópico: `planta1/light_status`
+   - Exemplo de Payload: `ON` ou `OFF`
+
+---
+
+## **Possíveis Melhorias**
+- Adicionar um relógio RTC para controle preciso do ciclo diário.
+- Implementar um sensor de luminosidade real, como o BH1750, para substituir o potenciômetro.
+- Criar uma interface de controle para ajuste remoto do limiar de luminosidade e do tempo máximo de luz.
+- Incluir notificações em tempo real via aplicativo ou dashboard.
+
+---
+
+## **Dispositivo Adjacente: Sistema de Automação de Estufa**
+
+Este dispositivo adjacente monitora e ajusta os níveis de umidade, pH e nutrientes (NPK) de uma estufa, utilizando um ESP32. O sistema utiliza sensores analógicos e servo-motores para administrar soluções corretivas conforme necessário.
+
+### **Componentes Utilizados**
+- **ESP32**: Microcontrolador principal.
+- **Sensores de Umidade, pH e NPK**: Monitora os parâmetros críticos para o crescimento das plantas.
+- **Servos**:
+  - Servo 1 (Nitrogênio - N): GPIO 13
+  - Servo 2 (Fósforo - P): GPIO 12
+  - Servo 3 (Potássio - K): GPIO 14
+  - Servo 4 (Acidificante): GPIO 27
+  - Servo 5 (Alcalinizante): GPIO 26
+  - Servo 6 (Água): GPIO 15
+
+### **Regras de Negócio**
+1. **Umidade**:
+   - Se o nível de umidade cair abaixo de 40%, o sistema ativa o servo de água.
+
+2. **pH**:
+   - Ideal: 6.5
+   - Se o pH for menor que 6.0, adiciona alcalinizante.
+   - Se o pH for maior que 7.0, adiciona acidificante.
+
+3. **Nutrientes (NPK)**:
+   - N, P, e K ideais: 50
+   - Se os níveis estiverem abaixo do ideal, o sistema adiciona o nutriente correspondente.
+
+### **Mensagens no MQTT**
+1. **Umidade**:
+   - Tópico: `planta1/umidade`
+   - Exemplo de Payload: `35` (percentual)
+
+2. **pH**:
+   - Tópico: `planta1/ph`
+   - Exemplo de Payload: `6.3`
+
+3. **NPK**:
+   - Tópicos: `planta1/n`, `planta1/p`, `planta1/k`
+   - Exemplo de Payload: `45` (percentual)
+
+### **Fluxo do Código**
+1. **Inicialização**:
+   - Configura os pinos de leitura dos sensores e de controle dos servos.
+   - Estabelece conexão WiFi e MQTT.
+
+2. **Loop Principal**:
+   - Lê os valores dos sensores de umidade, pH e NPK.
+   - Publica os valores nos tópicos MQTT correspondentes.
+   - Verifica os limites e ativa os servos corretivos conforme necessário.
+
+---
+
+## **Licença**
+Este projeto é livre para uso e modificação. Por favor, mencione o autor original ao redistribuir.
+
